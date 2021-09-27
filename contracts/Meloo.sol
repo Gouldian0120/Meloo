@@ -8,14 +8,14 @@
     ██║ ╚═╝ ██║███████╗███████╗╚██████╔╝╚██████╔╝
     ╚═╝     ╚═╝╚══════╝╚══════╝ ╚═════╝  ╚═════╝ 
     
-    1. 7 days of first token launch (subscription) with 20% of tokens.
+    1. 25 days of first token launch (subscription) with 20% of tokens.
     2. 20% for teams.
     3. Lock team tokens for 1 year (25% unlocked every year).
     4. For Investors, 10% (Private Sale) locked for 1 year (25% unlocked monthly)
     5. Extra 20% off Pancakeswap (after 1 month).
     6. 15% of website users (token project)
-       Locked out for 48 months (0.025% unlocked every month) for rewards website users
-    7. 15% reward to buyers who stake tokens for 1 year
+       Locked out for 208 weeks (721,153 unlocked every week) for rewards website users
+    7. 15% reward to buyers who stake tokens for 3 months
 */
 
 
@@ -797,15 +797,15 @@ contract meloo is Context, IBEP20, Ownable {
     mapping(address => uint256) private _lockedWalletAmount;
     mapping(address => uint256) private _timeUnlockAmt;
     
-    address [] _lstStakers;
-    bool [] _lstStakersState;
+    address [] private _lstStakers;
+    bool [] private _lstStakersState;
     
-    uint256 _stakingBeginPeriod;
-    uint256 _stakingPeriodEnd;
-
-    address private _firstLaunchWallet = 0x3ee5830cFA36197C855DE78B4a11351c15E65041;
+    uint256 private _stakingBeginPeriod;
+    uint256 private _stakingPeriodEnd;
+        
+    address private _firstLaunchWallet = 0x0647B06C5C4fF60e150263452a3D772Dd0E1F9C8;
     address private _teamWallet = 0xD730827aE3259B9cC2De8dC572454EFD4c8c3804;     
-    address private _investorWallet = 0x7AA01a69D6AbE07BD95d4C5d8D5d23b453b1A0e0;     
+    address private _investorWallet = 0x22635CDD8A32784Bb3D5698002Bb9C3EC4CCa3ae;     
     address private _pancakeWallet = 0xbC7dF46223F3e4d962529A371b96AFaAC5E17f90;     
     address private _rewardSiteUserWallet = 0xa63130f607A276CCC7156802cb328E5a6bba1f28;
     address private _rewardStakerWallet = address(this);
@@ -870,11 +870,12 @@ contract meloo is Context, IBEP20, Ownable {
     function lockStakers (address addrStaker) public {
         require(_stakerLock[addrStaker] < block.timestamp, "Wallet is already locked.");
         require(balanceOf(addrStaker) > 0, "Wallet must have tokens.");
+        require(block.timestamp > _stakingBeginPeriod && block.timestamp < _stakingPeriodEnd, "There is no staking.");
         
         _stakerLock[addrStaker] = block.timestamp + 90 days;
         _lstStakers.push(addrStaker);
 
-        if (block.timestamp > _stakingBeginPeriod && _stakingBeginPeriod + 10 >= block.timestamp)
+        if (block.timestamp > _stakingBeginPeriod && _stakingBeginPeriod + 10 days >= block.timestamp)
             _lstStakersState.push(true);
         else
             _lstStakersState.push(false);
@@ -1009,7 +1010,7 @@ contract meloo is Context, IBEP20, Ownable {
             if (_timeUnlockAmt[sender] < block.timestamp){
                 for (uint8 i = 0; i < 208; i ++){
                     if (_timeUnlockAmt[sender] + (7 days * i) < block.timestamp && _timeUnlockAmt[sender] < block.timestamp){
-                        _lockedWalletAmount[sender] = 721153 * (i + 1); //balanceOf(sender).div(100).mul((100 / 208) * (i + 1));
+                        _lockedWalletAmount[sender] = balanceOf(sender).div(208).mul(i + 1);    //721153 * 10 **18
                     }
                 }
             }
@@ -1057,13 +1058,21 @@ contract meloo is Context, IBEP20, Ownable {
         }
     }
 
-    function setStakingPeriod(uint256 _time) public onlyOwner {
+    function setStaking(uint256 _time) public onlyOwner {
+        setStakingPeriod(_time);
+    }
+    
+    function setStakingPeriod(uint256 _time) internal {
         _stakingBeginPeriod = _time;
         _stakingPeriodEnd = _time + 20 days;
+        
+        delete _lstStakers;
+        delete _lstStakersState;
     }
 
-    function distributeRewards() private {
-        require(_stakingPeriodEnd < block.timestamp, "Staking period is not finished.");
+    function distributeRewards() internal {
+        if ((_stakingPeriodEnd == 0 && _stakingPeriodEnd == 0) || _stakingPeriodEnd > block.timestamp)
+            return;
 
         uint256 totalStaked;
 
@@ -1075,14 +1084,16 @@ contract meloo is Context, IBEP20, Ownable {
             }
         }
 
-        uint256 percent = _tStakingRewardTotal.div(totalStaked).mul(100);
-
         uint256 rewardsByBalance;
         uint256 rewardsbyBonus;
         for (uint i=0; i<_lstStakers.length; i++)
         {
             rewardsByBalance = balanceOf(_lstStakers[i]).mul(15).div(100);
-            rewardsbyBonus = balanceOf(_lstStakers[i]).mul(percent).div(100);
+            
+            if (totalStaked > 0)
+                rewardsbyBonus = _tStakingRewardTotal.mul(balanceOf(_lstStakers[i])).div(totalStaked);
+            else
+                rewardsbyBonus = 0;
             
             if (balanceOf(address(this)) > rewardsByBalance)
             {
@@ -1090,7 +1101,7 @@ contract meloo is Context, IBEP20, Ownable {
                 _tOwned[address(this)] = _tOwned[address(this)].sub(rewardsByBalance);
             }
             
-            if (_lstStakersState[i])
+            if (_lstStakersState[i] && rewardsbyBonus > 0)
             {
                 if (balanceOf(address(this)) > rewardsbyBonus)
                 {
@@ -1101,15 +1112,15 @@ contract meloo is Context, IBEP20, Ownable {
         }
         
         // restrat the staking
-        _stakingBeginPeriod = block.timestamp;
-        _stakingPeriodEnd = _stakingBeginPeriod + 20 days;
+        setStakingPeriod(block.timestamp);
     }
 }
 
 contract SellForUsers is Context, Ownable{
     using SafeMath for uint256;
     meloo private tokenContract;
-    uint256 lockTime;
+    uint256 private lockTime;
+    
     constructor () public {
     }
     function setTokenAddress(address payable addr) public onlyOwner{
@@ -1119,9 +1130,9 @@ contract SellForUsers is Context, Ownable{
     receive() external payable {
         buy();
     }
+    
     function buy() public payable {
         require(lockTime > block.timestamp, "Contract is locked.");
-        
         uint256 etherUsed = msg.value;
         uint256 tokensToBuy = etherUsed.mul(tokenContract._tokensPerETH_User());
     	require(tokensToBuy >= (3500 * 10 ** 18), "Minimum buy is 3500!");
