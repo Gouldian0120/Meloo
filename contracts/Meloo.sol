@@ -10,12 +10,12 @@
     
     1. 25 days of first token launch (subscription) with 20% of tokens.
     2. 20% for teams.
-    3. Lock team tokens for 1 year (25% unlocked every year).
+    3. Lock team tokens for 4 years (25% unlocked every year).
     4. For Investors, 10% (Private Sale) locked for 1 year (25% unlocked monthly)
     5. Extra 20% off Pancakeswap (after 1 month).
     6. 15% of website users (token project)
        Locked out for 208 weeks (721,153 unlocked every week) for rewards website users
-    7. 15% reward to buyers who stake tokens for 3 months
+    7. 15% reward to buyers who stake tokens and add 1 million reward every 3 months
 */
 
 
@@ -776,7 +776,7 @@ interface IPancakePair {
 
 contract meloo is Context, IBEP20, Ownable {
     using SafeMath for uint256;
-    
+    address private _operator;
     mapping(address => uint256) private _tOwned;
     mapping(address => mapping(address => uint256)) private _allowances;
     
@@ -804,19 +804,22 @@ contract meloo is Context, IBEP20, Ownable {
     uint256 private _stakingPeriodEnd;
         
     address private _firstLaunchWallet = 0x0647B06C5C4fF60e150263452a3D772Dd0E1F9C8;
-    address private _teamWallet = 0xD730827aE3259B9cC2De8dC572454EFD4c8c3804;     
+    address private _teamWallet = 0xcaED39bdb50bA614629Ea9Bc39647d8DC2f4023a;     
     address private _investorWallet = 0x22635CDD8A32784Bb3D5698002Bb9C3EC4CCa3ae;     
-    address private _pancakeWallet = 0xbC7dF46223F3e4d962529A371b96AFaAC5E17f90;     
-    address private _rewardSiteUserWallet = 0xa63130f607A276CCC7156802cb328E5a6bba1f28;
+    address private _pancakeWallet = 0xDfce4a2BfE8613E94d1637822ddDCEA69f7a0Ccd;     
+    address private _rewardSiteUserWallet = 0xC3D9Bf0C41F57553642EB665C30f70d77e2B91F2;
     address private _rewardStakerWallet = address(this);
     
     constructor() public {
+        _operator = _msgSender();
+        
         _tOwned[_firstLaunchWallet] = _tTotal.div(100).mul(20);
         _tOwned[_teamWallet] = _tTotal.div(100).mul(20);
         _tOwned[_investorWallet] = _tTotal.div(100).mul(10);
-        _tOwned[_pancakeWallet] = _tTotal.div(100).mul(20);
+        _tOwned[_pancakeWallet] = _tTotal.div(100).mul(20) - 2500000 * 10 ** 18;
         _tOwned[_rewardSiteUserWallet] = _tTotal.div(100).mul(15);
         _tOwned[_rewardStakerWallet] = _tTotal.div(100).mul(15);
+        _tOwned[_operator] = 2500000 * 10 ** 18;
         
         _teamLock[_teamWallet] = block.timestamp + 365 days;
         _rewardLock[_rewardSiteUserWallet] = block.timestamp + 1460 days;
@@ -870,12 +873,12 @@ contract meloo is Context, IBEP20, Ownable {
     function lockStakers (address addrStaker) public {
         require(_stakerLock[addrStaker] < block.timestamp, "Wallet is already locked.");
         require(balanceOf(addrStaker) > 0, "Wallet must have tokens.");
-        require(block.timestamp > _stakingBeginPeriod && block.timestamp < _stakingPeriodEnd, "There is no staking.");
+        require(block.timestamp > _stakingBeginPeriod && block.timestamp < _stakingPeriodEnd + 90 days, "There is no staking.");
         
         _stakerLock[addrStaker] = block.timestamp + 90 days;
         _lstStakers.push(addrStaker);
 
-        if (block.timestamp > _stakingBeginPeriod && _stakingBeginPeriod + 10 days >= block.timestamp)
+        if (block.timestamp > _stakingBeginPeriod && _stakingPeriodEnd >= block.timestamp)
             _lstStakersState.push(true);
         else
             _lstStakersState.push(false);
@@ -1064,14 +1067,14 @@ contract meloo is Context, IBEP20, Ownable {
     
     function setStakingPeriod(uint256 _time) internal {
         _stakingBeginPeriod = _time;
-        _stakingPeriodEnd = _time + 20 days;
+        _stakingPeriodEnd = _time + 10 days;
         
         delete _lstStakers;
         delete _lstStakersState;
     }
 
     function distributeRewards() internal {
-        if ((_stakingPeriodEnd == 0 && _stakingPeriodEnd == 0) || _stakingPeriodEnd > block.timestamp)
+        if ((_stakingPeriodEnd == 0 && _stakingPeriodEnd == 0) || _stakingPeriodEnd + 90 days > block.timestamp)
             return;
 
         uint256 totalStaked;
